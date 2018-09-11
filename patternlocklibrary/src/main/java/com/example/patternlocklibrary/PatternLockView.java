@@ -118,7 +118,7 @@ public class PatternLockView extends View {
         }
         Point point = selectedPoints.get(selectedPoints.size() - 1);
         paint.setColor(getPaintColor(point.getState()));
-        Point circlePoint = getCirclePoint(point, mTouchX, mTouchY);
+        Point circlePoint = getCrossCirclePoint(point, mTouchX, mTouchY);
         canvas.drawLine(circlePoint.getX(), circlePoint.getY(), mTouchX, mTouchY, paint);
     }
 
@@ -137,14 +137,14 @@ public class PatternLockView extends View {
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (selectedPoints.size() > 0 && (isSelectedPoint(mTouchX, mTouchY) == null)) {
+                if (selectedPoints.size() > 0 && (point== null)) {
                     isDrawLine = true;
                 } else {
                     isDrawLine = false;
                 }
                 if (point != null) {
                     addSelectedPoint(point);
-                    if (selectedPoints.size() > 2 && selectedPoints.size() <= 5) {
+                    if (selectedPoints.size() >= 2 && selectedPoints.size() <= 5) {
                         isConnectPoint = true;
                     }
                 }
@@ -204,11 +204,17 @@ public class PatternLockView extends View {
     }
 
 
-    private Point getCirclePoint(Point centerPoint, float outsideX, float outsideY) {
+    /**获取从圆外一点与圆心的连线与圆的交点坐标
+     * @param circlePoint   圆心坐标
+     * @param outsidePointX  圆外一点横坐标
+     * @param outsidePointY   圆外一点纵坐标
+     * @return
+     */
+    private Point getCrossCirclePoint(Point circlePoint, float outsidePointX, float outsidePointY) {
         Point point = null;
-        double distance = Math.pow(outsideX - centerPoint.getX(), 2) + Math.pow(outsideY - centerPoint.getY(), 2);
-        float pointX = (float) (pointRadius * (outsideX - centerPoint.getX()) / Math.sqrt(distance) + centerPoint.getX());
-        float pointY = (float) (pointRadius * (outsideY - centerPoint.getY()) / Math.sqrt(distance) + centerPoint.getY());
+        double distance = Math.pow(outsidePointX - circlePoint.getX(), 2) + Math.pow(outsidePointY - circlePoint.getY(), 2);
+        float pointX = (float) (pointRadius * (outsidePointX - circlePoint.getX()) / Math.sqrt(distance) + circlePoint.getX());
+        float pointY = (float) (pointRadius * (outsidePointY - circlePoint.getY()) / Math.sqrt(distance) + circlePoint.getY());
         point = new Point(pointX, pointY);
         return point;
     }
