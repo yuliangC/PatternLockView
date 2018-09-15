@@ -5,7 +5,10 @@ import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.Bundle;
+import android.os.Parcelable;
 import android.support.annotation.Nullable;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -22,9 +25,10 @@ public class PatternLockView extends View {
     private Point[][] points = new Point[3][3];
     private float mWidth;
     private float mTouchX, mTouchY;
-    private List<Point> selectedPoints = new ArrayList<>();
-    private boolean isInit,isDrawLine, isConnectPoint,isFinish;
-    private int pswDigit;
+    private ArrayList<Point> selectedPoints = new ArrayList<>();
+    private boolean isDrawLine, isConnectPoint,isFinish;
+    private int pswDigit,pointState;
+    private String password="";
     private PatternLockListener lockListener;
 
     public PatternLockView(Context context) {
@@ -47,30 +51,62 @@ public class PatternLockView extends View {
         array.recycle();
     }
 
+
+    /**
+     * 初始化所有点
+     */
     private void initPoints() {
         int value=0;
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[i].length; j++) {
                 value++;
-                points[i][j] = getPoint(i, j,value);
+                points[i][j] = getPoint(i, j,String.valueOf(value));
             }
         }
-        isInit=true;
     }
 
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (!isInit){
+        if (points[0][0]==null){
             initPoints();
         }
+        initSelectedPoints();
         drawAllPoints(canvas);
         paint.setStrokeWidth(lineWith);
         drawLines(canvas);
         drawConnectLines(canvas);
     }
 
+    /**
+     * 恢复view状态时会用到此方法，根据记住的密码来恢复点的状态
+     * 为什么不记住点的坐标信息呢？因为横竖屏切换后view的宽高都发生了变化，重绘时点的坐标都发生了变化
+     */
+    private void initSelectedPoints() {
+        if (TextUtils.isEmpty(password)){
+            return;
+        }
+        if (selectedPoints.size()>0){
+            return;
+        }
+        char[] chars=password.toCharArray();
+        for (char c:chars){
+            for (int i = 0; i < points.length; i++) {
+                for (int j = 0; j < points[i].length; j++) {
+                    if (points[i][j].getValue().equals(String.valueOf(c))){
+                        points[i][j].setState(pointState);
+                        selectedPoints.add(points[i][j]);
+                    }
+                }
+            }
+        }
+    }
 
+
+    /**
+     * 画点与点之间的连线
+     * @param canvas
+     */
     private void drawConnectLines(Canvas canvas) {
         if (!isConnectPoint || selectedPoints.size() <= 0) {
             return;
@@ -106,6 +142,10 @@ public class PatternLockView extends View {
         }
     }
 
+    /**
+     * 画手指触摸处与最后一个选中点之间的连线
+     * @param canvas
+     */
     private void drawLines(Canvas canvas) {
         if (!isDrawLine) {
             return;
@@ -152,19 +192,19 @@ public class PatternLockView extends View {
                 break;
             case MotionEvent.ACTION_UP:
                 isFinish=true;
-                String psw="";
                 if (selectedPoints.size()<=0){
                     return true;
                 }
                 for (Point point1:selectedPoints){
                     point1.setState(selectedPoints.size()==pswDigit?Point.STATE_SELECTED:Point.STATE_ERROR);
-                    psw=psw+point1.getValue();
+                    pointState=point1.getState();
+                    password=password+point1.getValue();
                 }
                 if (lockListener!=null){
                     if (selectedPoints.size()==pswDigit){
-                        lockListener.getPswSuccess(psw);
+                        lockListener.getPswSuccess(password);
                     }else {
-                        lockListener.getPswError(psw);
+                        lockListener.getPswError(password);
                     }
                 }
                 break;
@@ -174,6 +214,9 @@ public class PatternLockView extends View {
     }
 
 
+    /**
+     * 重置点的原始状态
+     */
     private void resetPoints() {
         selectedPoints.clear();
         for (int i = 0; i < points.length; i++) {
@@ -181,9 +224,14 @@ public class PatternLockView extends View {
                 points[i][j].setState(Point.STATE_NORMAL);
             }
         }
+        password="";
     }
 
 
+    /**
+     * @param point 被选中的点
+     *          新增选中的点
+     */
     private void addSelectedPoint(Point point) {
         if (selectedPoints.contains(point)) {
             return;
@@ -192,6 +240,10 @@ public class PatternLockView extends View {
     }
 
 
+    /**
+     * 画出所有的点
+     * @param canvas
+     */
     private void drawAllPoints(Canvas canvas) {
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < points.length; i++) {
@@ -220,6 +272,12 @@ public class PatternLockView extends View {
     }
 
 
+    /**
+     * 判断点是否被选中
+     * @param x 手指触摸的x坐标
+     * @param y 手指触摸的y坐标
+     * @return
+     */
     private Point isSelectedPoint(float x, float y) {
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[i].length; j++) {
@@ -235,7 +293,14 @@ public class PatternLockView extends View {
     }
 
 
-    private Point getPoint(int i, int j,int value) {
+    /**
+     * 初始化新点
+     * @param i 行数
+     * @param j 列数
+     * @param value 点的数值
+     * @return
+     */
+    private Point getPoint(int i, int j,String value) {
         float mSpace;
         float mAverageWidth;
         Point point = null;
@@ -243,18 +308,23 @@ public class PatternLockView extends View {
             mWidth = getMeasuredHeight() / 2;
             mSpace = (getMeasuredWidth() - mWidth) / 2;
             mAverageWidth = mWidth / 2;
-            point = new Point(mSpace + mAverageWidth * i, mAverageWidth * (j + 1));
+            point = new Point(mSpace + mAverageWidth * j, mAverageWidth * (i + 1));
         } else {
             mWidth = getMeasuredWidth() / 2;
             mSpace = (getMeasuredHeight() - mWidth) / 2;
             mAverageWidth = mWidth / 2;
             point = new Point(mAverageWidth * (j + 1), mSpace + mAverageWidth * i);
         }
-        point.setValue(String.valueOf(value));
+        point.setValue(value);
         return point;
     }
 
 
+    /**
+     * 根据点的状态返回画笔的颜色
+     * @param state 点的状态
+     * @return
+     */
     private int getPaintColor(int state) {
         int color;
         switch (state) {
@@ -271,6 +341,16 @@ public class PatternLockView extends View {
         }
         return color;
     }
+
+
+    /**
+     * 重置点的状态
+     */
+    public void clearPointState(){
+        resetPoints();
+        invalidate();
+    }
+
 
     public void setLockListener(PatternLockListener lockListener) {
         this.lockListener = lockListener;
@@ -299,6 +379,57 @@ public class PatternLockView extends View {
     public void setPswDigit(int pswDigit) {
         this.pswDigit = pswDigit;
     }
+
+
+
+    @Nullable
+    @Override
+    protected Parcelable onSaveInstanceState() {
+        super.onSaveInstanceState();
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(PatternLockView.class.getSimpleName(),super.onSaveInstanceState());
+        bundle.putInt("defaultColor", defaultColor);
+        bundle.putInt("selectedColor", selectedColor);
+        bundle.putInt("errorColor", errorColor);
+        bundle.putFloat("pointRadius", pointRadius);
+        bundle.putFloat("lineWith", lineWith);
+        bundle.putFloat("mTouchX", mTouchX);
+        bundle.putFloat("mTouchY", mTouchY);
+        bundle.putInt("pswDigit", pswDigit);
+        bundle.putBoolean("isDrawLine", isDrawLine);
+        bundle.putBoolean("isConnectPoint", isConnectPoint);
+        bundle.putBoolean("isFinish", isFinish);
+        bundle.putString("password",password);
+        bundle.putInt("pointState",pointState);
+        return bundle;
+    }
+
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable state) {
+        if (state instanceof Bundle){
+            Bundle bundle= (Bundle) state;
+            defaultColor=bundle.getInt("defaultColor");
+            selectedColor=bundle.getInt("selectedColor");
+            errorColor=bundle.getInt("errorColor");
+            pswDigit=bundle.getInt("pswDigit");
+            pointRadius=bundle.getFloat("pointRadius");
+            lineWith=bundle.getFloat("lineWith");
+            mTouchX=bundle.getFloat("mTouchX");
+            mTouchY=bundle.getFloat("mTouchY");
+            isDrawLine=bundle.getBoolean("isDrawLine");
+            isConnectPoint=bundle.getBoolean("isConnectPoint");
+            isFinish=bundle.getBoolean("isFinish");
+            password=bundle.getString("password");
+            pointState=bundle.getInt("pointState");
+            super.onRestoreInstanceState(bundle.getParcelable(PatternLockView.class.getSimpleName()));
+        }else {
+            super.onRestoreInstanceState(state);
+        }
+    }
+
+
+
 
     public interface PatternLockListener{
         void getPswSuccess(String password);
